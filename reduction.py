@@ -18,19 +18,29 @@ if not os.path.exists(df_path):
     # remove the bandflux calibrator file
     bfcal_path = [a for a in block_files if 'bandfluxcal' in a][0]
     block_files = [a for a in block_files if 'bandfluxcal' not in a]
-    for block in block_files: 
-        temp_txt = np.loadtxt(block, dtype=bytes)
-        temp_arr.append([t[-1].decode('UTF-8')[1:].lower() for t in temp_txt])
 
-    # get the unique blocks if any are repeated
-    unique_blocks = np.sort(np.unique(temp_arr, return_index=True)[1])
-    sources = np.concatenate([temp_arr[index] for index in unique_blocks])
+    if len(block_files) > 1:
+
+        for block in block_files: 
+            temp_txt = np.loadtxt(block, dtype=bytes)
+            temp_arr.append([t[-1].decode('UTF-8')[1:].lower() for t in temp_txt])
+
+        # get the unique blocks if any are repeated
+        unique_blocks = np.sort(np.unique(temp_arr, return_index=True)[1])
+        sources = np.concatenate([temp_arr[index] for index in unique_blocks])
+
+    else:
+        temp_txt = np.loadtxt(block_files[0], dtype=bytes)
+        temp_arr.append([t[-1].decode('UTF-8')[1:].lower() for t in temp_txt])
+        sources = temp_arr[0]
+        
+
     sources = [s+suffix for s in sources]
     # specify the seperate bandflux cal
     
     bandflux_cal = str(np.genfromtxt(bfcal_path, dtype=str))+suffix
     sources = np.append(bandflux_cal,sources)
-    print(sources)
+    print('working with these sources: {0}'.format(sources))
 
     # some are repeated but they are in the order we need for phase calibration
 
@@ -44,7 +54,7 @@ if not os.path.exists(df_path):
 # get list of sources
 phasecal_df = pd.DataFrame.from_csv(df_path)
 phasecal_df = phasecal_df.fillna('')
-
+check_if_data_unpacked(phasecal_df,processed_data_dir,df_path)
 
 sources = phasecal_df["name"].values.tolist()
 bandflux_cal = sources[0]
@@ -59,11 +69,10 @@ for h in phasecal_df.index.values.tolist():
 
 
     # if you never got flux from your last reduction, go redo that one
-    while True: 
+    while True:         
         h = check_ifreduced(processed_data_dir, sources, h, phasecal_df, suffix)
-        print(h)
         if h is None:
-            print("all reduced")
+            #print("all reduced")
             exit()
             break
         p = find_phasecal(phasecal_df,h)
@@ -78,6 +87,16 @@ for h in phasecal_df.index.values.tolist():
     print('source = '+source) 
     print('phasecal = '+phasecal_df.loc[h]["phasecal"])
 
+    # check if the data exists
+    if not os.path.exists(processed_data_dir+'/'+source):
+        print("data for {0} not found. Skipping".format(processed_data_dir+'/'+source))
+        sources.pop(h)
+        #phasecal_df.drop(phasecal_df.index[h], inplace=True)
+        #phasecal_df.drop('index', axis=1)
+        #phasecal_df.reset_index(inplace=True)
+        #phasecal_df.to_csv(df_path)
+        sys.exit(2)
+        break
 
     # make directory to store pngs, logs from reduction
     dir_name = source +"_reduction"
@@ -89,8 +108,6 @@ for h in phasecal_df.index.values.tolist():
 
     os.makedirs(dir_name)
     log_it(log_name,"Miriad Output for {0} on {1} \n \n".format(source,time.strftime("%d/%m/%Y")), "")
-    
-    
     
      
     if source == bandflux_cal:
@@ -112,7 +129,8 @@ for h in phasecal_df.index.values.tolist():
 
         # mfcal parameters
         vis = source
-        mir_output = miriad.mfcal(vis=vis)
+        refant=refant
+        mir_output = miriad.mfcal(vis=vis,refant=refant)
         if display_results:
             print(mir_output.decode("utf-8"))
 
@@ -274,9 +292,9 @@ for h in phasecal_df.index.values.tolist():
     interval="0.1"
     nfbin="4"
     options="xyvary"
-
+    refant=refant
     mir_output = miriad.gpcal(vis=vis,interval=interval,nfbin=nfbin,
-                               options=options)
+                               options=options,refant=refant)
 
     log_it(log_name,"gpcal", mir_output)
 

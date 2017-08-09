@@ -20,7 +20,7 @@ parser.add_argument('dir', nargs=1, type=str, help='directory with /raw and /blo
 parser.add_argument('-sf','--skip_manual_flagging', help='skip flagging manually', action="store_true", default = False)
 parser.add_argument('-d','--display_results',  help='don\'t output to terminal', action="store_true", default = False)
 args = parser.parse_args()
-parser.print_help()
+#parser.print_help()
 
 band = args.band[0]
 date_dir = args.dir[0]
@@ -56,9 +56,6 @@ raw_data_dir = "/Volumes/mjrose/C3030/{0}/raw".format(date_dir)
 # where you want to save the visibilities, other pngs, logs
 processed_data_dir = "/Volumes/mjrose/C3030/{0}/reduced_{1}".format(date_dir,band)
 
-if args.skip_manual_flagging:
-	image_dir = image_dir + '_quick'
-	processed_data_dir = processed_data_dir + '_quick'
 
 
 if not os.path.exists(image_dir):
@@ -67,4 +64,5 @@ if not os.path.exists(image_dir):
 if not os.path.exists(processed_data_dir):
 	os.makedirs(processed_data_dir)
 
-
+# if you need to change the reference antenna, which I needed for '2016'
+refant = 4

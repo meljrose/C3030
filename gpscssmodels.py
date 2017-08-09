@@ -1,10 +1,13 @@
+# Joe Callingham, 2017
+
 # !/bin/python
 # Code for all the models used to fit CSS/GPS sources. All are fitting in linear space.
 import scipy.special as special
 import numpy as np
 
-def curve(freq, freq_peak, peakfreq, alphathick, alphathin): # Model taken from Tschager et al. 2003. General fit not based on any physics.
-    return freq_peak/(1 -np.exp(-1))*((freq/peakfreq)**alphathick)*(1 - np.exp(-(freq/peakfreq)**(alphathin-alphathick)))
+# I changed freq, freq_peak, peakfreq, alphathick, alphathin to freq, snorm, freq_peak, alpha1, p
+def curve(freq, S_norm, freq_peak, alpha1, p): # Model taken from Tschager et al. 2003. General fit not based on any physics.
+    return S_norm/(1 -np.exp(-1))*((freq/freq_peak)**alpha1)*(1 - np.exp(-(freq/freq_peak)**(p-alpha1)))
 
 def powlaw(freq,a,alpha): # defining powlaw as S = a*nu^-alpha. Important to have x value first in definition of function.
     return a*(freq**(-alpha))

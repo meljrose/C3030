@@ -32,7 +32,11 @@ def find_phasecal(phasecal_df,h):
         potential_phasecal_percent_flagged = phasecal_df.loc[h-j]["percent_flagged"]
         #print(potential_phasecal_name,potential_phasecal_flux,potential_phasecal_percent_flagged)
         if not potential_phasecal_flux:
-            h_arr = phasecal_df[(phasecal_df.index < (h-j)) & (phasecal_df['flux'] != '')].index[0]
+            try:
+                h_arr = phasecal_df[(phasecal_df.index < (h-j)) & (phasecal_df['flux'] != '')].index[0]
+            except:
+                # unable to set phase cal if no flux
+                return(False)
             temp = np.max(h_arr)
             #print("temp: {0}".format(temp))
             if temp:
@@ -67,35 +71,50 @@ def rm_outfile(outfiles):
             pass
 
 # returns h if not yet reduced or the next h that needs to be reduced
-def check_ifreduced(processed_data_dir, sources, h, phasecal_df, suffix):
+
+def check_ifreduced(processed_data_dir, sources, h, phasecal_df, suffix, redo=False):
+    
     source = sources[h]
     filenames = glob.glob(processed_data_dir+'/*_reduction')
     already_reduced = [file.split('/')[-1].split("_")[0] for file in filenames]
-    #print(already_reduced, source)
     if source in already_reduced:        
         while source in already_reduced:
             if h < (len(sources)-1):
+                
                 #print('phasecal', not phasecal_df.loc[h]["flux"], phasecal_df.loc[h]["flux"])
                 # if the source files exist but there is no flux listed
                 # redo that reduction
+                
                 if not phasecal_df.loc[h]["flux"]:
                     # remove old reduction files, and return that h to be reduced
                     base = source.split(suffix)[0]
                     file_list = glob.glob(processed_data_dir+"/"+base+'*')
-                    print(processed_data_dir+'/'+source)
-                    file_list.remove(processed_data_dir+'/'+source)
-                    rm_outfile(file_list)
-                    return(h)
+                    
+                    if os.path.exists(processed_data_dir+'/'+source):
+                        file_list.remove(processed_data_dir+'/'+source)
+                        if redo: 
+                            rm_outfile(file_list)
+                        return(h)
+                    else:
+                        print("data not found for {0}".format(source))
+
+
                 h+=1
                 source = sources[h]
+                while source == '':
+                    if h < (len(sources)-1):
+                        h+=1
+                        source = sources[h]
+                
                 filenames = glob.glob(processed_data_dir+'/*_reduction')
                 already_reduced = [file.split('/')[-1].split("_")[0] for file in filenames]
-                #print(already_reduced, source)
+                
             else:
                 print("all sources are already reduced")
                 return(None)
-
     return(h)
+
+
 
 
 # takes mir_output from uvsplit and return the names of the new files
@@ -142,7 +161,7 @@ def flaggingcheck_pgflag(mir_output):
 
 
 # check if the rms decreases with each iteration
-def rmscheck_clean(mir_output, display_results, log_name):
+def rmscheck_clean(mir_output, display_results, log_name=False):
     tmp = mir_output.decode("utf-8", errors="replace").split("\n")[2:]
     
     min_arr = []
@@ -170,7 +189,8 @@ def rmscheck_clean(mir_output, display_results, log_name):
         warning = "Warning: RMS values are not monotonically decreasing after {0} iterations".format(culprit)
         if display_results:
             print(warning)
-        log_it(log_name,"Warning", warning)
+        if log_name:    
+            log_it(log_name,"Warning", warning)
     
     # get a visual 
     '''
@@ -234,22 +254,26 @@ def grabpeak_imfit(mir_output):
 # I also had to install nbconvert
 # conda install nbconvert
 # conda install -c conda-forge jupyter_contrib_nbextensions
-def export_to_html(filename,source):
+def export_to_html(notebook_dir,filename,source):
     save_as = notebook_dir+'/'+source+'_reduction.html'
-    os.remove(save_as)
+    try:
+        os.remove(save_as)
+    except:
+        pass
     rename_cmd = filename.replace(".ipynb", ".html") + ' ' + save_as
     print(rename_cmd)
     cmd = 'jupyter nbconvert --to html_embed --template toc2 {0}'.format(filename)
     subprocess.call(cmd, shell=True)
-    time.sleep(20)
-    if os.path.isfile(filename):
-        print("File exported as:\n\t{0}".format(fn))
-        print(time.strftime("%d/%m/%Y"))
-        return(source+'_reduction.html')
-    else:
-        # try again
-        time.sleep(20)
-        fn = export_to_html(filename,source)
+    return(save_as)
+    # time.sleep(20)
+    # if os.path.isfile(filename):
+    #     print("File exported as:\n\t{0}".format(fn))
+    #     print(time.strftime("%d/%m/%Y"))
+    #     return(source+'_reduction.html')
+    # else:
+    #     # try again
+    #     time.sleep(20)
+    #     fn = export_to_html(filename,source)
 
 def save_notebook():
     display(Javascript("IPython.notebook.save_notebook()"),
@@ -268,11 +292,11 @@ def move_and_display_pngs(device,dir_name,log, display_results):
         for plot in plot_list:
             display(Image(filename=plot, format='png'))
 
-    # rm them if they already exist
-    try:
-        os.remove(path_list)
-    except:
-        pass
+    # # rm them if they already exist
+    # try:
+    #     os.remove(path_list)
+    # except:
+    #     pass
     
     [os.rename(plot, dir_name+"/"+plot) for plot in plot_list]
     
@@ -286,3 +310,31 @@ def sorted_nicely(l):
     convert = lambda text: int(text) if text.isdigit() else text 
     alphanum_key = lambda key: [ convert(c) for c in re.split('([0-9]+)', key) ] 
     return sorted(l, key = alphanum_key)
+
+def check_if_data_unpacked(phasecal_df, processed_data_dir,df_path):
+    """ if there are sources in the block but not in the data,
+     don't include them in the reduction """
+    to_remove = []
+    sources = phasecal_df["name"].values.tolist()
+    for index, row in phasecal_df.iterrows():
+        source = sources[index]
+        if not os.path.exists(processed_data_dir+'/'+source):
+            to_remove.append(index)
+    if to_remove:
+        print('missing data for {0} --- removing from reduction list'.format([sources[i] for i in to_remove]))
+        phasecal_df.drop(phasecal_df.index[to_remove], inplace=True)
+        phasecal_df.reset_index(drop=True, inplace=True)
+        phasecal_df.to_csv(df_path)
+
+def atca_filter(n, freq_arr, flux_arr, flux_err_arr):
+    # frequency filter for plotting
+    mask = np.ones(len(freq_arr), dtype=bool)
+    ind = np.where((freq_arr >= 1290) & (freq_arr <= 3030))[0]
+    ind = np.append(ind, np.where((freq_arr >= 4500) & (freq_arr <= 6430))[0]) 
+    ind = np.append(ind,np.where((freq_arr >= 8070) & (freq_arr <= 9930))[0])
+    indmask = np.ones(len(ind), dtype=bool) 
+    indmask[::n] = False
+    ind = ind[indmask]
+    mask[ind] = False
+    return(freq_arr[mask], flux_arr[mask], flux_err_arr[mask])
+
