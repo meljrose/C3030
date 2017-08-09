@@ -2,13 +2,13 @@
 
 To reduce data without using jupyter notebooks, use reduction_setup.py which in turn uses loadmirdata.py and reduction.py
 
-#   # load data
-#   python loadmirdata.py C '2016-04-09'
-#                         ^band    ^--- directory containing raw, blocks, reduced_band folders
-#   python reduction.py C '2016-04-09'
-#
-# when using Xgterm, there's some bug where the script hangs until you close Xgterm
-#
+load data
+python loadmirdata.py C '2016-04-09'
+                       ^band    ^--- directory containing raw, blocks, reduced_band folders
+python reduction.py C '2016-04-09'
+ 
+when using Xgterm, there's some bug where the script hangs until you close Xgterm
+
 
 With the notebooks, first load the data with loadmirdata.py, then you can use reduction_batchrun.ipynb, which runs mirpy_reduction_template.ipynb
 
